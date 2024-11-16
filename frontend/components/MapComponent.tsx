@@ -5,15 +5,12 @@ import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-// Fix for default marker icons in Leaflet with Next.js
-const icon = L.icon({
-  iconUrl: "/marker-icon.png", // You'll need to add these images to your public folder
-  iconRetinaUrl: "/marker-icon-2x.png",
-  shadowUrl: "/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
+// Create a custom CSS marker icon
+const customIcon = L.divIcon({
+  className: "custom-marker",
+  html: '<div class="marker-pin"></div>',
+  iconSize: [30, 30],
+  iconAnchor: [15, 30],
 });
 
 // This component handles updating the map view when location changes
@@ -24,7 +21,7 @@ function LocationMarker({ position }: { position: [number, number] }) {
     map.flyTo(position, map.getZoom());
   }, [map, position]);
 
-  return <Marker position={position} icon={icon} />;
+  return <Marker position={position} icon={customIcon} />;
 }
 
 export const MapComponent = () => {
@@ -68,26 +65,3 @@ export const MapComponent = () => {
     </MapContainer>
   );
 };
-
-// Add this to your global CSS or a styled-component
-const styles = `
-  .leaflet-container {
-    height: 100%;
-    width: 100%;
-  }
-  
-  /* Optional: Customize map controls */
-  .leaflet-control-zoom {
-    border: none !important;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-  }
-  
-  .leaflet-control-zoom a {
-    color: #666 !important;
-    background-color: white !important;
-  }
-  
-  .leaflet-control-zoom a:hover {
-    color: #000 !important;
-  }
-`;
