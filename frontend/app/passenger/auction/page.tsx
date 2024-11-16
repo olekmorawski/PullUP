@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { User, MapPin, CheckCircle, RefreshCw, Loader2, DollarSign } from "lucide-react";
+import {
+  User,
+  MapPin,
+  CheckCircle,
+  RefreshCw,
+  Loader2,
+  DollarSign,
+  QrCode,
+  Clock,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +23,7 @@ import { formatEther } from "viem";
 import { CONTRACT_ABI } from "@/abi";
 import { CONTRACT_ADDRESS } from "@/address";
 import { useEthPrice } from "../page";
+import { useRouter } from "next/navigation";
 
 interface RideAuctionProps {
   rideId: bigint;
@@ -39,6 +49,11 @@ function RideAuction({ rideId }: RideAuctionProps) {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const ethPrice = useEthPrice();
+  const router = useRouter;
+
+  const handleGoToScanner = () => {
+    router.push("/passenger/scanner");
+  };
 
   // Read ride details
   const { data: rideDetails } = useReadContract({
@@ -273,11 +288,41 @@ function RideAuction({ rideId }: RideAuctionProps) {
                 )}
 
               {parsedRideStatus?.bidAccepted && (
-                <div className="flex items-center justify-center gap-2 text-green-600 bg-green-50 p-3 rounded-md">
-                  <CheckCircle className="h-5 w-5" />
-                  <span>Bid Accepted</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-center gap-2 text-green-600 bg-green-50 p-3 rounded-md">
+                    <CheckCircle className="h-5 w-5" />
+                    <span>Bid Accepted</span>
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={handleGoToScanner}
+                    variant="secondary"
+                  >
+                    <QrCode className="h-4 w-4 mr-2" />
+                    Show QR Code
+                  </Button>
                 </div>
               )}
+
+              {/* Add button when auction ends without acceptance */}
+              {timeLeft === 0 &&
+                !parsedRideStatus?.bidAccepted &&
+                parsedRideStatus?.firstBidPlaced && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-center gap-2 text-orange-600 bg-orange-50 p-3 rounded-md">
+                      <Clock className="h-5 w-5" />
+                      <span>Auction Ended</span>
+                    </div>
+                    <Button
+                      className="w-full"
+                      onClick={handleGoToScanner}
+                      variant="secondary"
+                    >
+                      <QrCode className="h-4 w-4 mr-2" />
+                      Show QR Code
+                    </Button>
+                  </div>
+                )}
             </div>
           </CardContent>
         </Card>
