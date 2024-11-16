@@ -5,14 +5,39 @@ import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
 import { createConfig, WagmiProvider } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http } from "viem";
-import { sepolia } from "viem/chains";
+import {
+  sepolia,
+  baseSepolia,
+  arbitrumSepolia,
+  scrollSepolia,
+  polygonAmoy,
+  celoAlfajores,
+  gnosisChiado,
+  zircuitTestnet,
+} from "viem/chains";
 import { ZeroDevSmartWalletConnectors } from "@dynamic-labs/ethereum-aa";
 
 const config = createConfig({
-  chains: [sepolia],
+  chains: [
+    sepolia,
+    baseSepolia,
+    arbitrumSepolia,
+    scrollSepolia,
+    polygonAmoy,
+    celoAlfajores,
+    gnosisChiado,
+    zircuitTestnet,
+  ],
   multiInjectedProviderDiscovery: false,
   transports: {
     [sepolia.id]: http(),
+    [baseSepolia.id]: http(),
+    [arbitrumSepolia.id]: http(),
+    [scrollSepolia.id]: http(),
+    [polygonAmoy.id]: http(),
+    [celoAlfajores.id]: http(),
+    [gnosisChiado.id]: http(),
+    [zircuitTestnet.id]: http(),
   },
 });
 
