@@ -43,7 +43,6 @@ import { formatUnits, erc20Abi, parseUnits } from "viem";
 import { CONTRACT_ABI } from "@/abi";
 import { CONTRACT_ADDRESS } from "@/address";
 
-
 const COMMON_TOKENS = [
   {
     address: "0x0000000000000000000000000000000000000000",
@@ -93,6 +92,31 @@ const useTokenBalance = (
   return { data, isError, isLoading };
 };
 
+export const useEthPrice = () => {
+  const [ethPrice, setEthPrice] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchEthPrice = async () => {
+      try {
+        const response = await fetch(
+          "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
+        );
+        const data = await response.json();
+        setEthPrice(data.ethereum.usd);
+      } catch (error) {
+        console.error("Failed to fetch ETH price:", error);
+      }
+    };
+
+    fetchEthPrice();
+    // Refresh price every minute
+    const interval = setInterval(fetchEthPrice, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return ethPrice;
+};
+
 export default function Passenger() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [destination, setDestination] = useState("");
@@ -106,6 +130,8 @@ export default function Passenger() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [txStatus, setTxStatus] = useState<string>("");
+  const [usdPrice, setUsdPrice] = useState("");
+  const ethPrice = useEthPrice();
 
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
@@ -278,9 +304,31 @@ export default function Passenger() {
   const handleCustomPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === "" || /^\d+(\.\d{0,2})?$/.test(value)) {
-      setCustomPrice(value);
+      setUsdPrice(value);
+      if (ethPrice && value !== "") {
+        const ethAmount = (parseFloat(value) / ethPrice).toFixed(6);
+        setCustomPrice(ethAmount);
+      } else {
+        setCustomPrice("");
+      }
     }
   };
+
+  useEffect(() => {
+    if (destination) {
+      const simulatedUsdPrice = Math.floor(Math.random() * 30) + 20; // $20-50 range
+      setSuggestedPrice(simulatedUsdPrice);
+      setUsdPrice(simulatedUsdPrice.toString());
+      if (ethPrice) {
+        const ethAmount = (simulatedUsdPrice / ethPrice).toFixed(6);
+        setCustomPrice(ethAmount);
+      }
+    } else {
+      setSuggestedPrice(0);
+      setUsdPrice("");
+      setCustomPrice("");
+    }
+  }, [destination, ethPrice]);
 
   const handleRequestRide = async () => {
     setError(null);
@@ -458,10 +506,14 @@ export default function Passenger() {
             <div className="mt-4 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium">Suggested Price:</span>
-                <span className="font-semibold">
-                  {selectedToken ? selectedToken.symbol : "ETH"}{" "}
-                  {suggestedPrice.toFixed(2)}
-                </span>
+                <div className="text-right">
+                  <span className="font-semibold block">
+                    ${suggestedPrice.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    ≈ {ethPrice && (suggestedPrice / ethPrice).toFixed(6)} ETH
+                  </span>
+                </div>
               </div>
               <div>
                 <Label
@@ -488,14 +540,24 @@ export default function Passenger() {
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                   <div className="relative flex-1">
-                    <Input
-                      id="custom-price"
-                      type="text"
-                      value={customPrice}
-                      onChange={handleCustomPriceChange}
-                      className="h-10"
-                      placeholder="Enter amount"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                        $
+                      </span>
+                      <Input
+                        id="custom-price"
+                        type="text"
+                        value={usdPrice}
+                        onChange={handleCustomPriceChange}
+                        className="h-10 pl-6"
+                        placeholder="Enter USD amount"
+                      />
+                    </div>
+                    {usdPrice && ethPrice && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        ≈ {(parseFloat(usdPrice) / ethPrice).toFixed(6)} ETH
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

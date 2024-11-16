@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, User, ArrowDown, Loader2 } from "lucide-react";
+import { MapPin, User, ArrowDown, Loader2, Navigation } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
 import { formatEther, parseEther } from "viem";
 import { CONTRACT_ABI } from "@/abi";
 import { CONTRACT_ADDRESS } from "@/address";
+import { useEthPrice } from "../passenger/page";
 
 interface RideCore {
   passenger: string;
@@ -42,6 +43,8 @@ export default function Driver() {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [bidAmount, setBidAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const ethPrice = useEthPrice();
+  const [usdBidAmount, setUsdBidAmount] = useState("");
 
   // Read ride count
   const { data: rideCount } = useReadContract({
@@ -75,6 +78,14 @@ export default function Driver() {
     functionName: "getRideStatus",
     args: [BigInt(currentRideId)],
   }) as { data: [boolean, boolean, boolean, boolean, boolean, boolean] };
+
+  // Read current driver's bid
+  const { data: driverBid } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: "getDriverBid",
+    args: [BigInt(currentRideId), address as `0x${string}`],
+  });
 
   const { writeContract, data: hash, isPending } = useWriteContract();
 
@@ -110,6 +121,13 @@ export default function Driver() {
       }
     : null;
 
+  // Check if current user is the winning driver (has the current lowest bid)
+  const isWinningDriver =
+    address &&
+    parsedRideCore?.currentBid &&
+    driverBid &&
+    driverBid === parsedRideCore.currentBid;
+
   // Update auction timer
   useEffect(() => {
     if (
@@ -136,6 +154,25 @@ export default function Driver() {
     return `${minutes.toString().padStart(2, "0")}:${seconds
       .toString()
       .padStart(2, "0")}`;
+  };
+
+  const formatUsdPrice = (ethAmount: bigint | undefined) => {
+    if (!ethAmount || !ethPrice) return "0.00";
+    const ethValue = parseFloat(formatEther(ethAmount));
+    return (ethValue * ethPrice).toFixed(2);
+  };
+
+  const handleUsdBidChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value === "" || /^\d+(\.\d{0,2})?$/.test(value)) {
+      setUsdBidAmount(value);
+      if (ethPrice && value !== "") {
+        const ethAmount = (parseFloat(value) / ethPrice).toFixed(6);
+        setBidAmount(ethAmount);
+      } else {
+        setBidAmount("");
+      }
+    }
   };
 
   const handlePlaceBid = async () => {
@@ -166,6 +203,11 @@ export default function Driver() {
     }
   };
 
+  const handleNavigateToPassenger = () => {
+    // Add navigation logic here
+    console.log("Navigating to passenger location...");
+  };
+
   // Early return if no active ride
   if (
     !parsedRideStatus?.active ||
@@ -186,7 +228,7 @@ export default function Driver() {
     );
   }
 
-  if (timeLeft === 0) {
+  if (timeLeft === 0 && !isWinningDriver) {
     return (
       <div className="flex flex-col h-screen bg-gray-100">
         <div className="flex-1 relative">
@@ -255,53 +297,82 @@ export default function Driver() {
           </div>
 
           {/* Current Price and Bid Interface */}
-          <div className="mb-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-semibold">Current Bid:</div>
-              <div className="text-lg font-bold text-green-600">
-                {parsedRideCore ? formatEther(parsedRideCore.currentBid) : "0"}{" "}
-                ETH
+          {timeLeft > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-semibold">Current Bid:</div>
+                <div className="text-right">
+                  <div className="text-lg font-bold text-green-600">
+                    $
+                    {parsedRideCore
+                      ? formatUsdPrice(parsedRideCore.currentBid)
+                      : "0.00"}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    ≈{" "}
+                    {parsedRideCore
+                      ? formatEther(parsedRideCore.currentBid)
+                      : "0"}{" "}
+                    ETH
+                  </div>
+                </div>
               </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative w-32">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                    $
+                  </span>
+                  <Input
+                    type="number"
+                    value={usdBidAmount}
+                    onChange={handleUsdBidChange}
+                    placeholder="USD"
+                    className="pl-6 h-10 text-center"
+                    step="0.01"
+                    min="0"
+                    disabled={isPending || isWaitingForTx}
+                  />
+                  {bidAmount && (
+                    <div className="text-xs text-gray-500 mt-1 text-center">
+                      ≈ {bidAmount} ETH
+                    </div>
+                  )}
+                </div>
+                <Button
+                  onClick={handlePlaceBid}
+                  className="h-10 flex-1"
+                  disabled={!bidAmount || isPending || isWaitingForTx}
+                >
+                  {isPending || isWaitingForTx ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {isPending ? "Confirming..." : "Placing Bid..."}
+                    </>
+                  ) : (
+                    <>
+                      <ArrowDown className="h-5 w-5 mr-1" />
+                      Place Bid
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
             </div>
+          )}
 
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                value={bidAmount}
-                onChange={(e) => setBidAmount(e.target.value)}
-                placeholder="ETH"
-                className="h-10 w-24 text-center"
-                step="0.01"
-                min="0"
-                disabled={isPending || isWaitingForTx}
-              />
-              <Button
-                onClick={handlePlaceBid}
-                className="h-10 flex-1"
-                disabled={
-                  !bidAmount || isPending || isWaitingForTx || timeLeft === 0
-                }
-              >
-                {isPending || isWaitingForTx ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {isPending ? "Confirming..." : "Placing Bid..."}
-                  </>
-                ) : (
-                  <>
-                    <ArrowDown className="h-5 w-5 mr-1" />
-                    Place Bid
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
-          </div>
-
-          <Button className="w-full h-9 text-sm" disabled={timeLeft === 0}>
-            {timeLeft === 0 ? "Auction Ended" : "Navigate to Passenger"}
-          </Button>
+          {/* Navigation Button - Only shown if auction ended and current user is winning driver */}
+          {timeLeft === 0 && isWinningDriver && (
+            <Button
+              onClick={handleNavigateToPassenger}
+              className="w-full h-9 text-sm"
+              variant="default"
+            >
+              <Navigation className="h-4 w-4 mr-2" />
+              Navigate to Passenger
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>

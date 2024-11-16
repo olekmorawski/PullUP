@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { User, MapPin, CheckCircle, RefreshCw, Loader2 } from "lucide-react";
+import { User, MapPin, CheckCircle, RefreshCw, Loader2, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
 import { formatEther } from "viem";
 import { CONTRACT_ABI } from "@/abi";
 import { CONTRACT_ADDRESS } from "@/address";
+import { useEthPrice } from "../page";
 
 interface RideAuctionProps {
   rideId: bigint;
@@ -20,6 +21,7 @@ interface RideAuctionProps {
 
 export default function PassengerAuction() {
   const { address } = useAccount();
+  const ethPrice = useEthPrice();
 
   // Get total rides to find latest ride by the user
   const { data: rideCount } = useReadContract({
@@ -36,6 +38,7 @@ export default function PassengerAuction() {
 function RideAuction({ rideId }: RideAuctionProps) {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const ethPrice = useEthPrice();
 
   // Read ride details
   const { data: rideDetails } = useReadContract({
@@ -146,6 +149,12 @@ function RideAuction({ rideId }: RideAuctionProps) {
     }
   };
 
+  const formatUsdPrice = (ethAmount: bigint | undefined) => {
+    if (!ethAmount || !ethPrice) return "0.00";
+    const ethValue = parseFloat(formatEther(ethAmount));
+    return (ethValue * ethPrice).toFixed(2);
+  };
+
   if (!parsedRideStatus?.active) {
     return (
       <div className="flex flex-col h-screen bg-gray-100">
@@ -196,21 +205,33 @@ function RideAuction({ rideId }: RideAuctionProps) {
               <div className="bg-gray-50 p-4 rounded-lg space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Starting Bid</span>
-                  <span className="font-medium">
-                    {parsedRideCore
-                      ? formatEther(parsedRideCore.startingBid)
-                      : "0"}{" "}
-                    ETH
-                  </span>
+                  <div className="text-right">
+                    <span className="font-medium block">
+                      ${formatUsdPrice(parsedRideCore?.startingBid)}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      ≈{" "}
+                      {parsedRideCore
+                        ? formatEther(parsedRideCore.startingBid)
+                        : "0"}{" "}
+                      ETH
+                    </span>
+                  </div>
                 </div>
                 <div className="flex justify-between items-center text-lg">
                   <span className="font-medium">Current Bid</span>
-                  <span className="font-bold text-green-600">
-                    {parsedRideCore
-                      ? formatEther(parsedRideCore.currentBid)
-                      : "0"}{" "}
-                    ETH
-                  </span>
+                  <div className="text-right">
+                    <span className="font-bold text-green-600 block">
+                      ${formatUsdPrice(parsedRideCore?.currentBid)}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      ≈{" "}
+                      {parsedRideCore
+                        ? formatEther(parsedRideCore.currentBid)
+                        : "0"}{" "}
+                      ETH
+                    </span>
+                  </div>
                 </div>
                 {driverInfo && parsedRideStatus?.firstBidPlaced && (
                   <div className="flex justify-between items-center pt-2 border-t">
@@ -262,9 +283,17 @@ function RideAuction({ rideId }: RideAuctionProps) {
         </Card>
 
         <div className="bg-white rounded-lg p-4 text-sm text-gray-500">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="h-4 w-4" />
-            <span>Auction updates automatically</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              <span>Auction updates automatically</span>
+            </div>
+            {ethPrice && (
+              <div className="flex items-center gap-1 text-xs text-gray-400">
+                <DollarSign className="h-3 w-3" />
+                <span>1 ETH = ${ethPrice.toFixed(2)}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
