@@ -17,8 +17,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "RideShare App",
-  description: "A modern ridesharing application",
+  title: "PulluP",
+  description: "Web3 ride hailing app",
 };
 
 export default function RootLayout({
