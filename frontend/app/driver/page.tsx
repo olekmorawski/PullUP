@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, User, ArrowDown, Loader2, Navigation } from "lucide-react";
+import {
+  MapPin,
+  User,
+  ArrowDown,
+  Loader2,
+  Navigation,
+  Check,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,6 +23,7 @@ import { formatEther, parseEther } from "viem";
 import { CONTRACT_ABI } from "@/abi";
 import { CONTRACT_ADDRESS } from "@/address";
 import { useEthPrice } from "../passenger/page";
+import { useRouter } from "next/navigation";
 
 interface RideCore {
   passenger: string;
@@ -45,6 +53,7 @@ export default function Driver() {
   const [error, setError] = useState<string | null>(null);
   const ethPrice = useEthPrice();
   const [usdBidAmount, setUsdBidAmount] = useState("");
+  const router = useRouter();
 
   // Read ride count
   const { data: rideCount } = useReadContract({
@@ -173,6 +182,10 @@ export default function Driver() {
         setBidAmount("");
       }
     }
+  };
+
+  const handleFinishRide = () => {
+    router.push("/driver/code");
   };
 
   const handlePlaceBid = async () => {
@@ -364,14 +377,25 @@ export default function Driver() {
 
           {/* Navigation Button - Only shown if auction ended and current user is winning driver */}
           {timeLeft === 0 && isWinningDriver && (
-            <Button
-              onClick={handleNavigateToPassenger}
-              className="w-full h-9 text-sm"
-              variant="default"
-            >
-              <Navigation className="h-4 w-4 mr-2" />
-              Navigate to Passenger
-            </Button>
+            <div className="space-y-3">
+              <Button
+                onClick={handleNavigateToPassenger}
+                className="w-full h-9 text-sm"
+                variant="default"
+              >
+                <Navigation className="h-4 w-4 mr-2" />
+                Navigate to Passenger
+              </Button>
+
+              <Button
+                onClick={handleFinishRide}
+                className="w-full h-9 text-sm"
+                variant="secondary"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Finish Ride
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>
