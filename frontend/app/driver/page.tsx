@@ -186,6 +186,26 @@ export default function Driver() {
     );
   }
 
+  if (timeLeft === 0) {
+    return (
+      <div className="flex flex-col h-screen bg-gray-100">
+        <div className="flex-1 relative">
+          <MapComponent />
+        </div>
+        <Card className="rounded-t-xl shadow-lg">
+          <CardContent className="p-6 text-center">
+            <div className="flex flex-col items-center justify-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+              <p className="text-gray-600 font-medium">
+                Searching for a passenger...
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       <div className="flex-1 relative">
