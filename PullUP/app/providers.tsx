@@ -14,6 +14,7 @@ import {
   celoAlfajores,
   gnosisChiado,
   zircuitTestnet,
+  mantleSepoliaTestnet,
 } from "viem/chains";
 import { ZeroDevSmartWalletConnectors } from "@dynamic-labs/ethereum-aa";
 
@@ -27,6 +28,7 @@ const config = createConfig({
     celoAlfajores,
     gnosisChiado,
     zircuitTestnet,
+    mantleSepoliaTestnet,
   ],
   multiInjectedProviderDiscovery: false,
   transports: {
@@ -38,6 +40,7 @@ const config = createConfig({
     [celoAlfajores.id]: http(),
     [gnosisChiado.id]: http(),
     [zircuitTestnet.id]: http(),
+    [mantleSepoliaTestnet.id]: http(),
   },
 });
 
