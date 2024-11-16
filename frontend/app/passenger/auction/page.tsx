@@ -32,6 +32,7 @@ interface RideAuctionProps {
 export default function PassengerAuction() {
   const { address } = useAccount();
   const ethPrice = useEthPrice();
+  const router = useRouter();
 
   // Get total rides to find latest ride by the user
   const { data: rideCount } = useReadContract({
@@ -49,7 +50,7 @@ function RideAuction({ rideId }: RideAuctionProps) {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const ethPrice = useEthPrice();
-  const router = useRouter;
+  const router = useRouter();
 
   const handleGoToScanner = () => {
     router.push("/passenger/auction/scanner");
