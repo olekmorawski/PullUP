@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+"use client";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Providers } from "./providers";
+import { usePathname } from "next/navigation";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -16,10 +17,19 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
-export const metadata: Metadata = {
-  title: "PulluP",
-  description: "Web3 ride hailing app",
-};
+function LayoutContent({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const showHeader = pathname !== "/";
+
+  return (
+    <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <Providers>
+        {showHeader && <Header />}
+        {children}
+      </Providers>
+    </body>
+  );
+}
 
 export default function RootLayout({
   children,
@@ -28,14 +38,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Providers>
-          <Header />
-          {children}
-        </Providers>
-      </body>
+      <LayoutContent>{children}</LayoutContent>
     </html>
   );
 }
