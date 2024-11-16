@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, User, ArrowDown, Loader2, Navigation } from "lucide-react";
+import { MapPin, User, ArrowDown, Loader2, Navigation, Check } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
 import { formatEther, parseEther } from "viem";
 import { CONTRACT_ABI } from "@/abi";
 import { CONTRACT_ADDRESS } from "@/address";
+import { useRouter } from "next/navigation"; // Add this import
 
 // Price fetching hook
 const useEthPrice = () => {
@@ -46,9 +47,9 @@ const useEthPrice = () => {
 
 // Utility functions for formatting
 const formatUSD = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -86,6 +87,7 @@ export default function Driver() {
   const [error, setError] = useState<string | null>(null);
   const { ethPrice, isLoading: isLoadingPrice } = useEthPrice();
   const [usdBidAmount, setUsdBidAmount] = useState("");
+  const router = useRouter();
 
   // Contract reads
   const { data: rideCount } = useReadContract({
@@ -227,7 +229,7 @@ export default function Driver() {
       }
 
       const bidInWei = parseEther(bidAmount);
-      
+
       writeContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
@@ -242,6 +244,10 @@ export default function Driver() {
       console.error("Error placing bid:", err);
       setError(err instanceof Error ? err.message : "Failed to place bid");
     }
+  };
+
+  const handleFinishRide = () => {
+    router.push("/driver/code");
   };
 
   const handleNavigateToPassenger = () => {
@@ -322,7 +328,10 @@ export default function Driver() {
               <User className="h-4 w-4 mr-2 text-gray-500" />
               <span className="text-sm font-semibold">
                 {parsedRideCore
-                  ? `${parsedRideCore.passenger.slice(0, 6)}...${parsedRideCore.passenger.slice(-4)}`
+                  ? `${parsedRideCore.passenger.slice(
+                      0,
+                      6
+                    )}...${parsedRideCore.passenger.slice(-4)}`
                   : "Loading..."}
               </span>
             </div>
@@ -337,10 +346,16 @@ export default function Driver() {
                 <div className="text-sm font-semibold">Current Bid:</div>
                 <div className="text-right">
                   <div className="text-lg font-bold text-green-600">
-                    {parsedRideCore ? formatUSD(ethToUsd(parsedRideCore.currentBid)) : "$0.00"}
+                    {parsedRideCore
+                      ? formatUSD(ethToUsd(parsedRideCore.currentBid))
+                      : "$0.00"}
                   </div>
                   <div className="text-xs text-gray-500">
-                    ≈ {parsedRideCore ? formatETH(parsedRideCore.currentBid) : "0"} ETH
+                    ≈{" "}
+                    {parsedRideCore
+                      ? formatETH(parsedRideCore.currentBid)
+                      : "0"}{" "}
+                    ETH
                   </div>
                 </div>
               </div>
@@ -388,14 +403,25 @@ export default function Driver() {
           )}
 
           {timeLeft === 0 && isWinningDriver && (
-            <Button
-              onClick={handleNavigateToPassenger}
-              className="w-full h-9 text-sm"
-              variant="default"
-            >
-              <Navigation className="h-4 w-4 mr-2" />
-              Navigate to Passenger
-            </Button>
+            <div className="space-y-3">
+              <Button
+                onClick={handleNavigateToPassenger}
+                className="w-full h-9 text-sm"
+                variant="default"
+              >
+                <Navigation className="h-4 w-4 mr-2" />
+                Navigate to Passenger
+              </Button>
+
+              <Button
+                onClick={handleFinishRide}
+                className="w-full h-9 text-sm"
+                variant="secondary"
+              >
+                <Check className="h-4 w-4 mr-2" />
+                Finish Ride
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>
