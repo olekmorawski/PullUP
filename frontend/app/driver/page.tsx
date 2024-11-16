@@ -1,14 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  MapPin,
-  User,
-  ArrowDown,
-  Loader2,
-  Navigation,
-  Check,
-} from "lucide-react";
+import { MapPin, User, ArrowDown, Loader2, Navigation } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,8 +15,48 @@ import {
 import { formatEther, parseEther } from "viem";
 import { CONTRACT_ABI } from "@/abi";
 import { CONTRACT_ADDRESS } from "@/address";
-import { useEthPrice } from "../passenger/page";
-import { useRouter } from "next/navigation";
+
+// Price fetching hook
+const useEthPrice = () => {
+  const [ethPrice, setEthPrice] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchEthPrice = async () => {
+      try {
+        const response = await fetch(
+          "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd"
+        );
+        const data = await response.json();
+        setEthPrice(data.ethereum.usd);
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Error fetching ETH price:", error);
+        setIsLoading(false);
+      }
+    };
+
+    fetchEthPrice();
+    const interval = setInterval(fetchEthPrice, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return { ethPrice, isLoading };
+};
+
+// Utility functions for formatting
+const formatUSD = (amount: number) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+};
+
+const formatETH = (wei: bigint) => {
+  return Number(formatEther(wei)).toFixed(6);
+};
 
 interface RideCore {
   passenger: string;
@@ -51,11 +84,10 @@ export default function Driver() {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [bidAmount, setBidAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const ethPrice = useEthPrice();
+  const { ethPrice, isLoading: isLoadingPrice } = useEthPrice();
   const [usdBidAmount, setUsdBidAmount] = useState("");
-  const router = useRouter();
 
-  // Read ride count
+  // Contract reads
   const { data: rideCount } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
@@ -64,7 +96,6 @@ export default function Driver() {
 
   const currentRideId = rideCount ? Number(rideCount) - 1 : 0;
 
-  // Read ride details
   const { data: rideDetails } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
@@ -72,7 +103,6 @@ export default function Driver() {
     args: [BigInt(currentRideId)],
   }) as { data: [string, string] };
 
-  // Read ride core
   const { data: rideCore } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
@@ -80,7 +110,6 @@ export default function Driver() {
     args: [BigInt(currentRideId)],
   }) as { data: [string, bigint, bigint, bigint] };
 
-  // Read ride status
   const { data: rideStatus } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
@@ -88,7 +117,6 @@ export default function Driver() {
     args: [BigInt(currentRideId)],
   }) as { data: [boolean, boolean, boolean, boolean, boolean, boolean] };
 
-  // Read current driver's bid
   const { data: driverBid } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
@@ -130,14 +158,27 @@ export default function Driver() {
       }
     : null;
 
-  // Check if current user is the winning driver (has the current lowest bid)
   const isWinningDriver =
     address &&
     parsedRideCore?.currentBid &&
     driverBid &&
     driverBid === parsedRideCore.currentBid;
 
-  // Update auction timer
+  // Price conversion functions
+  const ethToUsd = (ethAmount: bigint): number => {
+    if (!ethPrice) return 0;
+    const ethValue = Number(formatEther(ethAmount));
+    return ethValue * ethPrice;
+  };
+
+  const usdToEth = (usdAmount: string): string => {
+    if (!ethPrice || !usdAmount) return "";
+    const usdValue = parseFloat(usdAmount);
+    if (isNaN(usdValue)) return "";
+    return (usdValue / ethPrice).toFixed(6);
+  };
+
+  // Timer update
   useEffect(() => {
     if (
       parsedRideCore &&
@@ -165,27 +206,12 @@ export default function Driver() {
       .padStart(2, "0")}`;
   };
 
-  const formatUsdPrice = (ethAmount: bigint | undefined) => {
-    if (!ethAmount || !ethPrice) return "0.00";
-    const ethValue = parseFloat(formatEther(ethAmount));
-    return (ethValue * ethPrice).toFixed(2);
-  };
-
   const handleUsdBidChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    if (value === "" || /^\d+(\.\d{0,2})?$/.test(value)) {
+    if (value === "" || /^\d*\.?\d{0,2}$/.test(value)) {
       setUsdBidAmount(value);
-      if (ethPrice && value !== "") {
-        const ethAmount = (parseFloat(value) / ethPrice).toFixed(6);
-        setBidAmount(ethAmount);
-      } else {
-        setBidAmount("");
-      }
+      setBidAmount(usdToEth(value));
     }
-  };
-
-  const handleFinishRide = () => {
-    router.push("/driver/code");
   };
 
   const handlePlaceBid = async () => {
@@ -195,20 +221,22 @@ export default function Driver() {
         return;
       }
 
-      const bidValue = parseFloat(bidAmount);
-      if (isNaN(bidValue) || bidValue <= 0) {
+      if (!bidAmount || parseFloat(bidAmount) <= 0) {
         setError("Please enter a valid bid amount");
         return;
       }
 
+      const bidInWei = parseEther(bidAmount);
+      
       writeContract({
         address: CONTRACT_ADDRESS,
         abi: CONTRACT_ABI,
         functionName: "placeBid",
-        args: [BigInt(currentRideId), parseEther(bidAmount)],
+        args: [BigInt(currentRideId), bidInWei],
       });
 
       setBidAmount("");
+      setUsdBidAmount("");
       setError(null);
     } catch (err) {
       console.error("Error placing bid:", err);
@@ -217,7 +245,6 @@ export default function Driver() {
   };
 
   const handleNavigateToPassenger = () => {
-    // Add navigation logic here
     console.log("Navigating to passenger location...");
   };
 
@@ -269,7 +296,6 @@ export default function Driver() {
 
       <Card className="rounded-t-xl shadow-lg">
         <CardContent className="p-4">
-          {/* Ride Details */}
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="flex items-center">
               <MapPin className="h-4 w-4 mr-2 text-green-500 shrink-0" />
@@ -291,16 +317,12 @@ export default function Driver() {
             </div>
           </div>
 
-          {/* Timer and Passenger */}
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center">
               <User className="h-4 w-4 mr-2 text-gray-500" />
               <span className="text-sm font-semibold">
                 {parsedRideCore
-                  ? `${parsedRideCore.passenger.slice(
-                      0,
-                      6
-                    )}...${parsedRideCore.passenger.slice(-4)}`
+                  ? `${parsedRideCore.passenger.slice(0, 6)}...${parsedRideCore.passenger.slice(-4)}`
                   : "Loading..."}
               </span>
             </div>
@@ -309,24 +331,16 @@ export default function Driver() {
             </div>
           </div>
 
-          {/* Current Price and Bid Interface */}
           {timeLeft > 0 && (
             <div className="mb-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-semibold">Current Bid:</div>
                 <div className="text-right">
                   <div className="text-lg font-bold text-green-600">
-                    $
-                    {parsedRideCore
-                      ? formatUsdPrice(parsedRideCore.currentBid)
-                      : "0.00"}
+                    {parsedRideCore ? formatUSD(ethToUsd(parsedRideCore.currentBid)) : "$0.00"}
                   </div>
                   <div className="text-xs text-gray-500">
-                    ≈{" "}
-                    {parsedRideCore
-                      ? formatEther(parsedRideCore.currentBid)
-                      : "0"}{" "}
-                    ETH
+                    ≈ {parsedRideCore ? formatETH(parsedRideCore.currentBid) : "0"} ETH
                   </div>
                 </div>
               </div>
@@ -337,13 +351,11 @@ export default function Driver() {
                     $
                   </span>
                   <Input
-                    type="number"
+                    type="text"
                     value={usdBidAmount}
                     onChange={handleUsdBidChange}
                     placeholder="USD"
                     className="pl-6 h-10 text-center"
-                    step="0.01"
-                    min="0"
                     disabled={isPending || isWaitingForTx}
                   />
                   {bidAmount && (
@@ -375,27 +387,15 @@ export default function Driver() {
             </div>
           )}
 
-          {/* Navigation Button - Only shown if auction ended and current user is winning driver */}
           {timeLeft === 0 && isWinningDriver && (
-            <div className="space-y-3">
-              <Button
-                onClick={handleNavigateToPassenger}
-                className="w-full h-9 text-sm"
-                variant="default"
-              >
-                <Navigation className="h-4 w-4 mr-2" />
-                Navigate to Passenger
-              </Button>
-
-              <Button
-                onClick={handleFinishRide}
-                className="w-full h-9 text-sm"
-                variant="secondary"
-              >
-                <Check className="h-4 w-4 mr-2" />
-                Finish Ride
-              </Button>
-            </div>
+            <Button
+              onClick={handleNavigateToPassenger}
+              className="w-full h-9 text-sm"
+              variant="default"
+            >
+              <Navigation className="h-4 w-4 mr-2" />
+              Navigate to Passenger
+            </Button>
           )}
         </CardContent>
       </Card>
