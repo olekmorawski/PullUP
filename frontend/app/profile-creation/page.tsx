@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Camera,
   Car,
@@ -24,15 +25,106 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+interface VehicleDetails {
+  transportType: string;
+  registrationNumber: string;
+  brand: string;
+  model: string;
+  color: string;
+  fuelType: string;
+}
+
+interface ProfileData {
+  isDriver: boolean;
+  fullName: string;
+  phoneNumber: string;
+  countryCode: string;
+  country: string | null;
+  district: string;
+  vehicleDetails: VehicleDetails;
+}
+
+const defaultVehicleDetails: VehicleDetails = {
+  transportType: "",
+  registrationNumber: "",
+  brand: "",
+  model: "",
+  color: "",
+  fuelType: "",
+};
+
+const defaultProfileData: ProfileData = {
+  isDriver: false,
+  fullName: "",
+  phoneNumber: "",
+  countryCode: "+66",
+  country: null,
+  district: "",
+  vehicleDetails: defaultVehicleDetails,
+};
+
 export default function ProfileCreation() {
-  const [isDriver, setIsDriver] = useState(false);
-  const [country, setCountry] = useState<string | null>(null);
+  const router = useRouter();
+
+  const [formData, setFormData] = useState<ProfileData>(() => {
+    if (typeof window !== "undefined") {
+      const savedData = localStorage.getItem("profileData");
+      if (savedData) {
+        return JSON.parse(savedData) as ProfileData;
+      }
+    }
+    return defaultProfileData;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("profileData", JSON.stringify(formData));
+  }, [formData]);
+
+  const handleInputChange =
+    (field: keyof Omit<ProfileData, "vehicleDetails">) =>
+    (value: string | boolean) => {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: value,
+      }));
+    };
+
+  const handleVehicleDetailsChange =
+    (field: keyof VehicleDetails) => (value: string) => {
+      setFormData((prev) => ({
+        ...prev,
+        vehicleDetails: {
+          ...prev.vehicleDetails,
+          [field]: value,
+        },
+      }));
+    };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem("profileData", JSON.stringify(formData));
+    router.push("/");
+  };
+
+  const handleCancel = () => {
+    router.back();
+  };
+
+  const setIsDriver = (value: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      isDriver: value,
+    }));
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container max-w-md mx-auto p-4">
         <div className="flex items-center justify-between mb-6">
-          <button className="flex items-center text-gray-600">
+          <button
+            className="flex items-center text-gray-600"
+            onClick={handleCancel}
+          >
             <ChevronLeft className="h-5 w-5 mr-1" />
             Back
           </button>
@@ -41,14 +133,14 @@ export default function ProfileCreation() {
 
         <div className="flex justify-center space-x-4 mb-6">
           <Button
-            variant={isDriver ? "outline" : "default"}
+            variant={formData.isDriver ? "outline" : "default"}
             className="w-1/2"
             onClick={() => setIsDriver(false)}
           >
             Passenger
           </Button>
           <Button
-            variant={isDriver ? "default" : "outline"}
+            variant={formData.isDriver ? "default" : "outline"}
             className="w-1/2"
             onClick={() => setIsDriver(true)}
           >
@@ -63,16 +155,24 @@ export default function ProfileCreation() {
           </button>
         </div>
 
-        <form className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="fullName">Full Name</Label>
-            <Input id="fullName" placeholder="Enter your full name" />
+            <Input
+              id="fullName"
+              placeholder="Enter your full name"
+              value={formData.fullName}
+              onChange={(e) => handleInputChange("fullName")(e.target.value)}
+            />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="phone">Phone Number</Label>
             <div className="flex">
-              <Select defaultValue="+66">
+              <Select
+                value={formData.countryCode}
+                onValueChange={handleInputChange("countryCode")}
+              >
                 <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="BKK" />
                 </SelectTrigger>
@@ -88,13 +188,20 @@ export default function ProfileCreation() {
                 className="flex-1 ml-2"
                 id="phone"
                 placeholder="Your mobile number"
+                value={formData.phoneNumber}
+                onChange={(e) =>
+                  handleInputChange("phoneNumber")(e.target.value)
+                }
               />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="country">Country</Label>
-            <Select value={country ?? ""} onValueChange={setCountry}>
+            <Select
+              value={formData.country ?? ""}
+              onValueChange={handleInputChange("country")}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select country" />
               </SelectTrigger>
@@ -106,7 +213,11 @@ export default function ProfileCreation() {
 
           <div className="space-y-2">
             <Label htmlFor="district">District</Label>
-            <Select disabled={!country}>
+            <Select
+              disabled={!formData.country}
+              value={formData.district}
+              onValueChange={handleInputChange("district")}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select district" />
               </SelectTrigger>
@@ -116,14 +227,17 @@ export default function ProfileCreation() {
             </Select>
           </div>
 
-          {isDriver && (
+          {formData.isDriver && (
             <Card className="mt-6">
               <CardContent className="pt-6 space-y-4">
                 <h2 className="text-lg font-semibold mb-4">Car Details</h2>
 
                 <div className="space-y-2">
                   <Label htmlFor="transportType">Type of Transport</Label>
-                  <Select>
+                  <Select
+                    value={formData.vehicleDetails.transportType}
+                    onValueChange={handleVehicleDetailsChange("transportType")}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select transport type" />
                     </SelectTrigger>
@@ -163,27 +277,57 @@ export default function ProfileCreation() {
                   <Input
                     id="registration"
                     placeholder="Enter registration number"
+                    value={formData.vehicleDetails.registrationNumber}
+                    onChange={(e) =>
+                      handleVehicleDetailsChange("registrationNumber")(
+                        e.target.value
+                      )
+                    }
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="brand">Brand</Label>
-                  <Input id="brand" placeholder="Enter vehicle brand" />
+                  <Input
+                    id="brand"
+                    placeholder="Enter vehicle brand"
+                    value={formData.vehicleDetails.brand}
+                    onChange={(e) =>
+                      handleVehicleDetailsChange("brand")(e.target.value)
+                    }
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="model">Model</Label>
-                  <Input id="model" placeholder="Enter vehicle model" />
+                  <Input
+                    id="model"
+                    placeholder="Enter vehicle model"
+                    value={formData.vehicleDetails.model}
+                    onChange={(e) =>
+                      handleVehicleDetailsChange("model")(e.target.value)
+                    }
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="color">Color</Label>
-                  <Input id="color" placeholder="Enter vehicle color" />
+                  <Input
+                    id="color"
+                    placeholder="Enter vehicle color"
+                    value={formData.vehicleDetails.color}
+                    onChange={(e) =>
+                      handleVehicleDetailsChange("color")(e.target.value)
+                    }
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="fuelType">Fuel Type</Label>
-                  <Select>
+                  <Select
+                    value={formData.vehicleDetails.fuelType}
+                    onValueChange={handleVehicleDetailsChange("fuelType")}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select fuel type" />
                     </SelectTrigger>
@@ -214,10 +358,18 @@ export default function ProfileCreation() {
           )}
 
           <div className="flex gap-4 mt-6">
-            <Button variant="outline" className="w-full">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleCancel}
+            >
               Cancel
             </Button>
-            <Button className="w-full bg-green-600 hover:bg-green-700">
+            <Button
+              type="submit"
+              className="w-full bg-green-600 hover:bg-green-700"
+            >
               Save
             </Button>
           </div>

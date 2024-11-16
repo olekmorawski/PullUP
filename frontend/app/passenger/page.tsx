@@ -9,6 +9,7 @@ import {
   Navigation,
   Wallet,
   Check,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,9 +31,609 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { MapComponent } from "@/components/MapComponent";
-import { useAccount, useBalance, useConnect, useReadContract } from "wagmi";
-import { formatUnits, erc20Abi } from "viem";
+import {
+  useAccount,
+  useBalance,
+  useConnect,
+  useReadContract,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
+import { formatUnits, erc20Abi, parseUnits } from "viem";
 
+// Your contract ABI
+const CONTRACT_ABI = [
+  {
+    inputs: [],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "owner",
+        type: "address",
+      },
+    ],
+    name: "OwnableInvalidOwner",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "OwnableUnauthorizedAccount",
+    type: "error",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "rideId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "driver",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "bidAmount",
+        type: "uint256",
+      },
+    ],
+    name: "BidAccepted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "rideId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "driver",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "bidAmount",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "bool",
+        name: "isWinning",
+        type: "bool",
+      },
+    ],
+    name: "BidPlaced",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "previousOwner",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "newOwner",
+        type: "address",
+      },
+    ],
+    name: "OwnershipTransferred",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "rideId",
+        type: "uint256",
+      },
+    ],
+    name: "RideCancelled",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "rideId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "driver",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "RideCompletedAndPaid",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "rideId",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "passenger",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "startingBid",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "bidEndTime",
+        type: "uint256",
+      },
+    ],
+    name: "RideCreated",
+    type: "event",
+  },
+  {
+    inputs: [],
+    name: "AUCTION_DURATION",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_rideId",
+        type: "uint256",
+      },
+    ],
+    name: "acceptBid",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_rideId",
+        type: "uint256",
+      },
+    ],
+    name: "cancelRide",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_rideId",
+        type: "uint256",
+      },
+    ],
+    name: "completeRide",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "string",
+        name: "_pickupLocation",
+        type: "string",
+      },
+      {
+        internalType: "string",
+        name: "_destination",
+        type: "string",
+      },
+      {
+        internalType: "uint256",
+        name: "_startingBid",
+        type: "uint256",
+      },
+    ],
+    name: "createRide",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "driverInfo",
+    outputs: [
+      {
+        internalType: "address",
+        name: "winningDriver",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_rideId",
+        type: "uint256",
+      },
+      {
+        internalType: "address",
+        name: "_driver",
+        type: "address",
+      },
+    ],
+    name: "getDriverBid",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "bidAmount",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_rideId",
+        type: "uint256",
+      },
+    ],
+    name: "getDriverInfo",
+    outputs: [
+      {
+        internalType: "address",
+        name: "winningDriver",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_rideId",
+        type: "uint256",
+      },
+    ],
+    name: "getRideCore",
+    outputs: [
+      {
+        internalType: "address",
+        name: "passenger",
+        type: "address",
+      },
+      {
+        internalType: "uint256",
+        name: "startingBid",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "currentBid",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "bidEndTime",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_rideId",
+        type: "uint256",
+      },
+    ],
+    name: "getRideDetails",
+    outputs: [
+      {
+        internalType: "string",
+        name: "pickupLocation",
+        type: "string",
+      },
+      {
+        internalType: "string",
+        name: "destination",
+        type: "string",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_rideId",
+        type: "uint256",
+      },
+    ],
+    name: "getRideStatus",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "active",
+        type: "bool",
+      },
+      {
+        internalType: "bool",
+        name: "completed",
+        type: "bool",
+      },
+      {
+        internalType: "bool",
+        name: "paid",
+        type: "bool",
+      },
+      {
+        internalType: "bool",
+        name: "cancelled",
+        type: "bool",
+      },
+      {
+        internalType: "bool",
+        name: "firstBidPlaced",
+        type: "bool",
+      },
+      {
+        internalType: "bool",
+        name: "bidAccepted",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "owner",
+    outputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "_rideId",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "_bidAmount",
+        type: "uint256",
+      },
+    ],
+    name: "placeBid",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "renounceOwnership",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "rideCore",
+    outputs: [
+      {
+        internalType: "address",
+        name: "passenger",
+        type: "address",
+      },
+      {
+        internalType: "uint256",
+        name: "startingBid",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "currentBid",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "bidEndTime",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "rideCount",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "rideDetails",
+    outputs: [
+      {
+        internalType: "string",
+        name: "pickupLocation",
+        type: "string",
+      },
+      {
+        internalType: "string",
+        name: "destination",
+        type: "string",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "rideStatus",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "active",
+        type: "bool",
+      },
+      {
+        internalType: "bool",
+        name: "completed",
+        type: "bool",
+      },
+      {
+        internalType: "bool",
+        name: "paid",
+        type: "bool",
+      },
+      {
+        internalType: "bool",
+        name: "cancelled",
+        type: "bool",
+      },
+      {
+        internalType: "bool",
+        name: "firstBidPlaced",
+        type: "bool",
+      },
+      {
+        internalType: "bool",
+        name: "bidAccepted",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "newOwner",
+        type: "address",
+      },
+    ],
+    name: "transferOwnership",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    stateMutability: "payable",
+    type: "receive",
+  },
+] as const;
+
+// Replace with your contract address
+const CONTRACT_ADDRESS =
+  "0x1Cf77cBdf74cdE197607F3136ed5DB42a9871260" as `0x${string}`;
 // Define token type with readonly properties
 const COMMON_TOKENS = [
   {
@@ -91,13 +692,21 @@ export default function Passenger() {
   const [pickupType, setPickupType] = useState("current");
   const [customPickupAddress, setCustomPickupAddress] = useState("");
   const [customPickupTime, setCustomPickupTime] = useState("");
-  const [userMode, setUserMode] = useState<"passenger" | "driver">("passenger");
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
   const [tokens, setTokens] = useState<Token[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [txStatus, setTxStatus] = useState<string>("");
+  const [userMode, setUserMode] = useState<"passenger" | "driver">("passenger");
 
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
+
+  const { writeContract, data: hash, isPending } = useWriteContract();
+
+  const { isLoading: isWaitingForTx } = useWaitForTransactionReceipt({
+    hash,
+  });
 
   const { data: ethBalance, isLoading: isLoadingEth } = useBalance({
     address,
@@ -175,6 +784,78 @@ export default function Passenger() {
     selectedToken,
   ]);
 
+  const handleCreateRide = async () => {
+    setError(null);
+    setTxStatus("");
+
+    if (!isConnected) {
+      connect({ connector: connectors[0] });
+      return;
+    }
+
+    try {
+      if (!destination) {
+        setError("Please enter a destination");
+        return;
+      }
+
+      if (pickupType === "custom" && !customPickupAddress) {
+        setError("Please enter a pickup address");
+        return;
+      }
+
+      if (pickupType === "scheduled" && !customPickupTime) {
+        setError("Please enter a pickup time");
+        return;
+      }
+
+      if (!customPrice || parseFloat(customPrice) <= 0) {
+        setError("Please enter a valid price");
+        return;
+      }
+
+      const pickupLocation =
+        pickupType === "current"
+          ? "Current Location"
+          : pickupType === "scheduled"
+          ? `Scheduled: ${customPickupTime}`
+          : customPickupAddress;
+
+      // Convert price to wei if using ETH
+      const startingBid = parseUnits(
+        customPrice,
+        selectedToken?.decimals || 18
+      );
+
+      setTxStatus("Creating ride request...");
+
+      writeContract({
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: "createRide",
+        args: [pickupLocation, destination, startingBid],
+      });
+    } catch (error) {
+      console.error("Error creating ride:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to create ride"
+      );
+    }
+  };
+
+  // Effect to handle transaction status
+  useEffect(() => {
+    if (isPending) {
+      setTxStatus("Confirming transaction...");
+    } else if (isWaitingForTx) {
+      setTxStatus("Waiting for confirmation...");
+    } else if (hash) {
+      setTxStatus("Ride created successfully!");
+      // Optionally clear the form here
+      setTimeout(() => setTxStatus(""), 3000); // Clear status after 3 seconds
+    }
+  }, [hash, isPending, isWaitingForTx]);
+
   useEffect(() => {
     if (destination) {
       const simulatedPrice = Math.floor(Math.random() * 20) + 10;
@@ -193,18 +874,70 @@ export default function Passenger() {
     }
   };
 
-  const handleRequestRide = () => {
-    if (userMode === "passenger") {
-      if (!isConnected) {
-        connect({ connector: connectors[0] });
-      } else {
-        setShowTokenModal(true);
+  const handleRequestRide = async () => {
+    setError(null);
+    setTxStatus("");
+
+    if (!isConnected) {
+      connect({ connector: connectors[0] });
+      return;
+    }
+
+    try {
+      // Validate all required fields
+      if (!destination) {
+        setError("Please enter a destination");
+        return;
       }
-    } else {
-      console.log("Starting trip as driver");
+
+      if (pickupType === "custom" && !customPickupAddress) {
+        setError("Please enter a pickup address");
+        return;
+      }
+
+      if (pickupType === "scheduled" && !customPickupTime) {
+        setError("Please enter a pickup time");
+        return;
+      }
+
+      // Validate price is set
+      if (!customPrice || parseFloat(customPrice) <= 0) {
+        setError("Please enter a valid price");
+        return;
+      }
+
+      // Validate token is selected
+      if (!selectedToken) {
+        setError("Please select a payment token");
+        return;
+      }
+
+      const pickupLocation =
+        pickupType === "current"
+          ? "Current Location"
+          : pickupType === "scheduled"
+          ? `Scheduled: ${customPickupTime}`
+          : customPickupAddress;
+
+      // Convert price to wei
+      const startingBid = parseUnits(customPrice, selectedToken.decimals);
+
+      setTxStatus("Creating ride request...");
+
+      writeContract({
+        address: CONTRACT_ADDRESS,
+        abi: CONTRACT_ABI,
+        functionName: "createRide",
+        args: [pickupLocation, destination, startingBid],
+      });
+    } catch (error) {
+      console.error("Error creating ride:", error);
+      setError(
+        error instanceof Error ? error.message : "Failed to create ride"
+      );
     }
   };
-
+  
   const handleTokenSelect = (token: Token) => {
     setSelectedToken(token);
     setShowTokenModal(false);
@@ -313,7 +1046,7 @@ export default function Passenger() {
             <Search className="h-4 w-4 absolute right-8 top-1/2 transform -translate-y-1/2 text-gray-400" />
           </div>
 
-          {destination && userMode === "passenger" && (
+          {destination && (
             <div className="mt-4 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium">Suggested Price:</span>
@@ -361,13 +1094,34 @@ export default function Passenger() {
             </div>
           )}
 
+          {error && (
+            <div className="mt-4 p-2 bg-red-100 text-red-700 rounded-md text-sm">
+              {error}
+            </div>
+          )}
+
+          {txStatus && (
+            <div className="mt-4 p-2 bg-blue-50 text-blue-700 rounded-md text-sm">
+              {txStatus}
+            </div>
+          )}
+
           {destination && (
-            <Button className="w-full mt-4" onClick={handleRequestRide}>
-              {userMode === "passenger"
-                ? isConnected
-                  ? "Request Ride"
-                  : "Connect Wallet"
-                : "Start Trip"}
+            <Button
+              className="w-full mt-4"
+              onClick={handleRequestRide}
+              disabled={!customPrice || isPending || isWaitingForTx}
+            >
+              {!isConnected ? (
+                "Connect Wallet"
+              ) : isPending || isWaitingForTx ? (
+                <div className="flex items-center justify-center">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {txStatus}
+                </div>
+              ) : (
+                "Create Ride Request"
+              )}
             </Button>
           )}
         </CardContent>
