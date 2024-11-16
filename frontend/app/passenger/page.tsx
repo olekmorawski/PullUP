@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -132,6 +133,7 @@ export default function Passenger() {
   const [txStatus, setTxStatus] = useState<string>("");
   const [usdPrice, setUsdPrice] = useState("");
   const ethPrice = useEthPrice();
+  const router = useRouter();
 
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
@@ -285,10 +287,13 @@ export default function Passenger() {
       setTxStatus("Waiting for confirmation...");
     } else if (hash) {
       setTxStatus("Ride created successfully!");
-      // Optionally clear the form here
-      setTimeout(() => setTxStatus(""), 3000); // Clear status after 3 seconds
+      // Add redirect after successful transaction
+      setTimeout(() => {
+        setTxStatus("");
+        router.push("/passenger/auction"); // Redirect to auction page
+      }, 2000); // Redirect after 2 seconds to allow user to see success message
     }
-  }, [hash, isPending, isWaitingForTx]);
+  }, [hash, isPending, isWaitingForTx, router]);
 
   useEffect(() => {
     if (destination) {
