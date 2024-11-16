@@ -10,8 +10,8 @@ export default function MenuPage() {
   return (
     <div className="flex min-h-[calc(100vh-64px)] bg-gray-100">
       <div className="flex flex-col items-center justify-center w-full max-w-4xl mx-auto p-4">
-        <h1 className="text-4xl font-bold mb-8 text-center">
-          Welcome to RideShare
+        <h1 className="text-xl font-bold mb-8 text-center">
+          Choose your role.
         </h1>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-2xl">
           <Card className="hover:shadow-lg transition-shadow h-full">
