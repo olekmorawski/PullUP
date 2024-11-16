@@ -20,8 +20,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Command,
@@ -229,7 +227,8 @@ export default function Passenger() {
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium">Suggested Price:</span>
                 <span className="font-semibold">
-                  ${suggestedPrice.toFixed(2)}
+                  {selectedCurrency === "USD" ? "$" : selectedCurrency}{" "}
+                  {suggestedPrice.toFixed(2)}
                 </span>
               </div>
               <div>
@@ -239,16 +238,26 @@ export default function Passenger() {
                 >
                   Your Offer:
                 </Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    id="custom-price"
-                    type="text"
-                    value={customPrice}
-                    onChange={handleCustomPriceChange}
-                    className="pl-9 h-10"
-                    placeholder="Enter your price"
-                  />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 px-3 flex items-center gap-1"
+                    onClick={() => setShowCurrencyModal(true)}
+                  >
+                    {selectedCurrency === "USD" ? "$" : selectedCurrency}
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                  <div className="relative flex-1">
+                    <Input
+                      id="custom-price"
+                      type="text"
+                      value={customPrice}
+                      onChange={handleCustomPriceChange}
+                      className="h-10"
+                      placeholder="Enter amount"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -288,49 +297,38 @@ export default function Passenger() {
       </Card>
 
       <Dialog open={showCurrencyModal} onOpenChange={setShowCurrencyModal}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Choose Payment Currency</DialogTitle>
-            <DialogDescription>
-              Select the currency you'd like to use for payment.
-            </DialogDescription>
+        <DialogContent className="sm:max-w-[400px] p-0">
+          <DialogHeader className="p-4 pb-2">
+            <DialogTitle>Select Currency</DialogTitle>
           </DialogHeader>
-          <Command>
-            <CommandInput placeholder="Search currencies..." />
-            <CommandList>
+          <Command className="border-0">
+            <CommandInput
+              placeholder="Search currencies..."
+              className="border-b"
+            />
+            <CommandList className="max-h-[300px]">
               <CommandEmpty>No currencies found.</CommandEmpty>
               <CommandGroup>
                 {currencies.map((currency) => (
                   <CommandItem
                     key={currency.code}
                     onSelect={() => handleCurrencySelect(currency.code)}
+                    className="flex items-center justify-between py-2 px-4 cursor-pointer"
                   >
-                    <Check
-                      className={`mr-2 h-4 w-4 ${
-                        selectedCurrency === currency.code
-                          ? "opacity-100"
-                          : "opacity-0"
-                      }`}
-                    />
-                    <span>
-                      {currency.name} ({currency.code})
-                    </span>
-                    <span className="ml-auto text-sm text-gray-500">
-                      {currency.code === "USD"
-                        ? `$${customPrice}`
-                        : `${currency.code} ${convertCurrency(
-                            parseFloat(customPrice),
-                            currency.code
-                          )}`}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium min-w-[40px]">
+                        {currency.code === "USD" ? "$" : currency.code}
+                      </span>
+                      <span>{currency.name}</span>
+                    </div>
+                    {selectedCurrency === currency.code && (
+                      <Check className="h-4 w-4 text-green-600" />
+                    )}
                   </CommandItem>
                 ))}
               </CommandGroup>
             </CommandList>
           </Command>
-          <DialogFooter>
-            <Button onClick={() => setShowCurrencyModal(false)}>Cancel</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
