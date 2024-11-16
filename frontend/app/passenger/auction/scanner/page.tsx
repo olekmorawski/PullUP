@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import React, { useState, useEffect } from "react";
+import { Html5Qrcode } from "html5-qrcode";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Check, AlertCircle, Camera } from "lucide-react";
@@ -33,80 +33,98 @@ const RideScanPage = () => {
     hash,
   });
 
-  const startScanning = () => {
-    setScanning(true);
-    setError(null);
-
-    const scanner = new Html5QrcodeScanner(
-      "qr-reader",
-      {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-      },
-      false
-    );
-
-    scanner.render(handleScan, handleError);
-
-    // Store scanner instance for cleanup
-    (window as any).qrScanner = scanner;
-  };
-
-  const stopScanning = () => {
-    if ((window as any).qrScanner) {
-      (window as any).qrScanner.clear();
-    }
-    setScanning(false);
-  };
-
-  const handleScan = async (decodedText: string) => {
+  const startScanning = async () => {
     try {
-      const scannedData: RideData = JSON.parse(decodedText);
+      const html5QrCode = new Html5Qrcode("qr-reader");
 
-      // Validate QR code data
-      if (scannedData.type !== "ride_completion") {
-        throw new Error("Invalid QR code type");
-      }
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+        },
+        async (decodedText) => {
+          // QR Code scanned successfully
+          try {
+            const scannedData: RideData = JSON.parse(decodedText);
 
-      if (
-        !scannedData.rideId ||
-        !scannedData.driver ||
-        !scannedData.passenger
-      ) {
-        throw new Error("Invalid QR code data");
-      }
+            // Validate QR code data
+            if (scannedData.type !== "ride_completion") {
+              throw new Error("Invalid QR code type");
+            }
 
-      // Verify the passenger is the one who booked the ride
-      if (scannedData.passenger.toLowerCase() !== address?.toLowerCase()) {
-        throw new Error("This ride belongs to a different passenger");
-      }
+            if (
+              !scannedData.rideId ||
+              !scannedData.driver ||
+              !scannedData.passenger
+            ) {
+              throw new Error("Invalid QR code data");
+            }
 
-      // Stop scanning after successful read
-      stopScanning();
+            // Verify the passenger is the one who booked the ride
+            if (
+              scannedData.passenger.toLowerCase() !== address?.toLowerCase()
+            ) {
+              throw new Error("This ride belongs to a different passenger");
+            }
 
-      // Call smart contract to complete the ride
-      await writeContract({
-        address: scannedData.contractAddress as `0x${string}`,
-        abi: CONTRACT_ABI,
-        functionName: "completeRide",
-        args: [BigInt(scannedData.rideId)],
-      });
+            // Stop scanning
+            await html5QrCode.stop();
+            setScanning(false);
 
-      setSuccess(true);
-    } catch (err) {
-      console.error("Error processing QR code:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to process QR code"
+            // Call smart contract to complete the ride
+            await writeContract({
+              address: scannedData.contractAddress as `0x${string}`,
+              abi: CONTRACT_ABI,
+              functionName: "completeRide",
+              args: [BigInt(scannedData.rideId)],
+            });
+
+            setSuccess(true);
+          } catch (err) {
+            console.error("Error processing QR code:", err);
+            setError(
+              err instanceof Error ? err.message : "Failed to process QR code"
+            );
+            await html5QrCode.stop();
+            setScanning(false);
+          }
+        },
+        (errorMessage) => {
+          // QR Code scanning failed
+          console.log(errorMessage);
+        }
       );
-      stopScanning();
+
+      setScanning(true);
+      setError(null);
+    } catch (err) {
+      console.error("Failed to start scanner:", err);
+      setError(
+        "Failed to start camera. Please make sure you've granted camera permissions."
+      );
+      setScanning(false);
     }
   };
 
-  const handleError = (err: any) => {
-    console.error("QR Scanner error:", err);
-    setError("Failed to access camera. Please try again.");
-    stopScanning();
+  const stopScanning = async () => {
+    try {
+      const html5QrCode = new Html5Qrcode("qr-reader");
+      await html5QrCode.stop();
+      setScanning(false);
+    } catch (err) {
+      console.error("Failed to stop scanner:", err);
+    }
   };
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (scanning) {
+        stopScanning();
+      }
+    };
+  }, [scanning]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 flex items-center justify-center">
@@ -130,26 +148,19 @@ const RideScanPage = () => {
               </div>
             ) : (
               <>
-                <div id="qr-reader" className="w-full"></div>
-                {!scanning ? (
-                  <Button
-                    onClick={startScanning}
-                    className="w-full"
-                    disabled={isWaitingForTx}
-                  >
-                    <Camera className="w-5 h-5 mr-2" />
-                    Start Scanning
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    onClick={stopScanning}
-                    className="w-full"
-                    disabled={isWaitingForTx}
-                  >
-                    Stop Scanning
-                  </Button>
-                )}
+                <div id="qr-reader" className="w-full max-w-sm">
+                  {/* Camera feed will be inserted here */}
+                </div>
+
+                <Button
+                  onClick={scanning ? stopScanning : startScanning}
+                  className="w-full"
+                  disabled={isWaitingForTx}
+                  variant={scanning ? "outline" : "default"}
+                >
+                  <Camera className="w-5 h-5 mr-2" />
+                  {scanning ? "Stop Scanning" : "Start Scanning"}
+                </Button>
               </>
             )}
 
@@ -162,6 +173,29 @@ const RideScanPage = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Add some CSS to help with the camera view */}
+      <style jsx global>{`
+        #qr-reader video {
+          border-radius: 0.5rem;
+          width: 100% !important;
+        }
+        #qr-reader {
+          border: none !important;
+          width: 100% !important;
+        }
+        #qr-reader__status_span {
+          display: none;
+        }
+        #qr-reader__dashboard_section_csr button {
+          padding: 8px 16px;
+          background: #0ea5e9;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 };
