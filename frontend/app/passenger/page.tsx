@@ -7,7 +7,7 @@ import {
   ChevronDown,
   Search,
   Navigation,
-  DollarSign,
+  Wallet,
   Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,18 +30,57 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { MapComponent } from "@/components/MapComponent";
+import { useAccount, useBalance, useConnect, useReadContract } from "wagmi";
+import { formatUnits, erc20Abi } from "viem";
 
-const exchangeRates = {
-  USD: 1,
-  EUR: 0.85,
-  GBP: 0.73,
-  JPY: 110.14,
-  AUD: 1.34,
-  CAD: 1.25,
-  CHF: 0.92,
-  CNY: 6.47,
-  INR: 74.38,
-  MXN: 20.05,
+// Define token type with readonly properties
+const COMMON_TOKENS = [
+  {
+    address: "0x0000000000000000000000000000000000000000",
+    symbol: "ETH",
+    name: "Ethereum",
+    decimals: 18,
+  },
+  {
+    address: "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    symbol: "USDT",
+    name: "Tether USD",
+    decimals: 6,
+  },
+  {
+    address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+  },
+  {
+    address: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+    symbol: "WBTC",
+    name: "Wrapped Bitcoin",
+    decimals: 8,
+  },
+] as const;
+
+interface Token {
+  symbol: string;
+  name: string;
+  balance: string;
+  decimals: number;
+  address: string;
+}
+
+const useTokenBalance = (
+  tokenAddress: `0x${string}`,
+  userAddress: `0x${string}` | undefined
+) => {
+  const { data, isError, isLoading } = useReadContract({
+    address: tokenAddress,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: userAddress ? [userAddress] : undefined,
+  });
+
+  return { data, isError, isLoading };
 };
 
 export default function Passenger() {
@@ -53,27 +92,88 @@ export default function Passenger() {
   const [customPickupAddress, setCustomPickupAddress] = useState("");
   const [customPickupTime, setCustomPickupTime] = useState("");
   const [userMode, setUserMode] = useState<"passenger" | "driver">("passenger");
-  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] = useState("USD");
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<Token | null>(null);
+  const [tokens, setTokens] = useState<Token[]>([]);
 
-  const recentLocations = [
-    "Work - 123 Business St",
-    "Home - 456 Home Ave",
-    "Gym - 789 Fitness Blvd",
-  ];
+  const { address, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
 
-  const currencies = [
-    { code: "USD", name: "US Dollar" },
-    { code: "EUR", name: "Euro" },
-    { code: "GBP", name: "British Pound" },
-    { code: "JPY", name: "Japanese Yen" },
-    { code: "AUD", name: "Australian Dollar" },
-    { code: "CAD", name: "Canadian Dollar" },
-    { code: "CHF", name: "Swiss Franc" },
-    { code: "CNY", name: "Chinese Yuan" },
-    { code: "INR", name: "Indian Rupee" },
-    { code: "MXN", name: "Mexican Peso" },
-  ];
+  const { data: ethBalance, isLoading: isLoadingEth } = useBalance({
+    address,
+  });
+
+  // Individual token balance hooks
+  const { data: usdtBalance, isLoading: isLoadingUsdt } = useTokenBalance(
+    COMMON_TOKENS[1].address as `0x${string}`,
+    address
+  );
+  const { data: usdcBalance, isLoading: isLoadingUsdc } = useTokenBalance(
+    COMMON_TOKENS[2].address as `0x${string}`,
+    address
+  );
+  const { data: wbtcBalance, isLoading: isLoadingWbtc } = useTokenBalance(
+    COMMON_TOKENS[3].address as `0x${string}`,
+    address
+  );
+
+  useEffect(() => {
+    if (
+      !address ||
+      isLoadingEth ||
+      isLoadingUsdt ||
+      isLoadingUsdc ||
+      isLoadingWbtc
+    )
+      return;
+
+    const updatedTokens: Token[] = [];
+
+    if (ethBalance) {
+      updatedTokens.push({
+        symbol: "ETH",
+        name: "Ethereum",
+        balance: ethBalance.formatted,
+        decimals: 18,
+        address: "0x0000000000000000000000000000000000000000",
+      });
+    }
+
+    // Add other tokens if they have balances
+    const tokenBalances = [
+      { balance: usdtBalance, token: COMMON_TOKENS[1] },
+      { balance: usdcBalance, token: COMMON_TOKENS[2] },
+      { balance: wbtcBalance, token: COMMON_TOKENS[3] },
+    ];
+
+    tokenBalances.forEach(({ balance, token }) => {
+      if (balance !== undefined) {
+        updatedTokens.push({
+          symbol: token.symbol,
+          name: token.name,
+          balance: formatUnits(balance, token.decimals),
+          decimals: token.decimals,
+          address: token.address,
+        });
+      }
+    });
+
+    setTokens(updatedTokens);
+    if (!selectedToken && updatedTokens.length > 0) {
+      setSelectedToken(updatedTokens[0]);
+    }
+  }, [
+    address,
+    ethBalance,
+    usdtBalance,
+    usdcBalance,
+    wbtcBalance,
+    isLoadingEth,
+    isLoadingUsdt,
+    isLoadingUsdc,
+    isLoadingWbtc,
+    selectedToken,
+  ]);
 
   useEffect(() => {
     if (destination) {
@@ -95,21 +195,20 @@ export default function Passenger() {
 
   const handleRequestRide = () => {
     if (userMode === "passenger") {
-      setShowCurrencyModal(true);
+      if (!isConnected) {
+        connect({ connector: connectors[0] });
+      } else {
+        setShowTokenModal(true);
+      }
     } else {
       console.log("Starting trip as driver");
     }
   };
 
-  const handleCurrencySelect = (currency: string) => {
-    setSelectedCurrency(currency);
-    setShowCurrencyModal(false);
-    console.log(`Requesting ride with currency: ${currency}`);
-  };
-
-  const convertCurrency = (amount: number, toCurrency: string) => {
-    const rate = exchangeRates[toCurrency as keyof typeof exchangeRates];
-    return (amount * rate).toFixed(2);
+  const handleTokenSelect = (token: Token) => {
+    setSelectedToken(token);
+    setShowTokenModal(false);
+    console.log(`Selected token for payment:`, token);
   };
 
   return (
@@ -131,103 +230,95 @@ export default function Passenger() {
             )}
           </button>
 
-          <div className="mt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                type="text"
-                placeholder={
-                  userMode === "passenger"
-                    ? "Where to?"
-                    : "Set your destination"
-                }
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                className="pl-9 h-10"
-              />
-            </div>
-          </div>
-
-          {isExpanded && (
-            <div className="mt-4 space-y-3">
-              <div>
-                <h3 className="text-sm font-medium mb-2">Recent Locations</h3>
-                <div className="space-y-1">
-                  {recentLocations.map((location, index) => (
-                    <button
-                      key={index}
-                      className="w-full text-left px-2 py-1.5 text-sm hover:bg-gray-100 rounded-md flex items-center"
-                      onClick={() => setDestination(location)}
-                    >
-                      <Navigation className="h-4 w-4 mr-2 text-gray-500" />
-                      {location}
-                    </button>
-                  ))}
+          <div className={`mt-6 ${isExpanded ? "" : "hidden"}`}>
+            <div className="space-y-4">
+              <RadioGroup
+                value={pickupType}
+                onValueChange={setPickupType}
+                className="flex flex-col space-y-2"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="current" id="current" />
+                  <Label htmlFor="current" className="flex items-center">
+                    <Navigation className="h-4 w-4 mr-2" />
+                    Current Location
+                  </Label>
                 </div>
-              </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="custom" id="custom" />
+                  <Label htmlFor="custom" className="flex items-center">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    Custom Location
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="scheduled" id="scheduled" />
+                  <Label htmlFor="scheduled" className="flex items-center">
+                    <Clock className="h-4 w-4 mr-2" />
+                    Schedule for Later
+                  </Label>
+                </div>
+              </RadioGroup>
 
-              <div className="space-y-3 pt-2">
-                <Label className="text-sm font-medium">
-                  {userMode === "passenger"
-                    ? "Pickup Location"
-                    : "Starting Location"}
-                </Label>
-                <RadioGroup
-                  value={pickupType}
-                  onValueChange={setPickupType}
-                  className="space-y-1"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="current" id="current-location" />
-                    <Label htmlFor="current-location" className="text-sm">
-                      Current Location
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="custom" id="custom-location" />
-                    <Label htmlFor="custom-location" className="text-sm">
-                      Custom Location
-                    </Label>
-                  </div>
-                </RadioGroup>
-
-                {pickupType === "custom" && (
+              {pickupType === "custom" && (
+                <div>
+                  <Label
+                    htmlFor="pickup-address"
+                    className="text-sm font-medium block mb-1"
+                  >
+                    Pickup Address
+                  </Label>
                   <Input
-                    type="text"
+                    id="pickup-address"
+                    placeholder="Enter pickup address"
                     value={customPickupAddress}
                     onChange={(e) => setCustomPickupAddress(e.target.value)}
-                    placeholder="Enter address"
-                    className="h-10"
                   />
-                )}
+                </div>
+              )}
 
+              {pickupType === "scheduled" && (
                 <div>
                   <Label
                     htmlFor="pickup-time"
                     className="text-sm font-medium block mb-1"
                   >
-                    {userMode === "passenger"
-                      ? "Pickup Time"
-                      : "Departure Time"}
+                    Pickup Time
                   </Label>
                   <Input
                     id="pickup-time"
-                    type="time"
+                    type="datetime-local"
                     value={customPickupTime}
                     onChange={(e) => setCustomPickupTime(e.target.value)}
-                    className="h-10"
                   />
                 </div>
-              </div>
+              )}
             </div>
-          )}
+          </div>
+
+          <div className="mt-4">
+            <Label
+              htmlFor="destination"
+              className="text-sm font-medium block mb-1"
+            >
+              Where to?
+            </Label>
+            <Input
+              id="destination"
+              placeholder="Enter your destination"
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              className="pr-10"
+            />
+            <Search className="h-4 w-4 absolute right-8 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          </div>
 
           {destination && userMode === "passenger" && (
             <div className="mt-4 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium">Suggested Price:</span>
                 <span className="font-semibold">
-                  {selectedCurrency === "USD" ? "$" : selectedCurrency}{" "}
+                  {selectedToken ? selectedToken.symbol : "ETH"}{" "}
                   {suggestedPrice.toFixed(2)}
                 </span>
               </div>
@@ -243,9 +334,16 @@ export default function Passenger() {
                     type="button"
                     variant="outline"
                     className="h-10 px-3 flex items-center gap-1"
-                    onClick={() => setShowCurrencyModal(true)}
+                    onClick={() => {
+                      if (isConnected) {
+                        setShowTokenModal(true);
+                      } else {
+                        connect({ connector: connectors[0] });
+                      }
+                    }}
                   >
-                    {selectedCurrency === "USD" ? "$" : selectedCurrency}
+                    <Wallet className="h-4 w-4 mr-1" />
+                    {selectedToken ? selectedToken.symbol : "Connect"}
                     <ChevronDown className="h-4 w-4" />
                   </Button>
                   <div className="relative flex-1">
@@ -264,68 +362,59 @@ export default function Passenger() {
           )}
 
           {destination && (
-            <div className="mt-4 pt-3 space-y-2 border-t border-gray-200">
-              <div className="flex items-center text-sm text-gray-600">
-                <Clock className="h-4 w-4 mr-2 shrink-0" />
-                <span>Estimated arrival: 5 mins</span>
-              </div>
-              <div className="flex items-center text-sm text-gray-600">
-                <MapPin className="h-4 w-4 mr-2 shrink-0" />
-                <span className="truncate">
-                  {pickupType === "current"
-                    ? "Current location"
-                    : customPickupAddress || "Not set"}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-4 sticky bottom-0 left-0 right-0 bg-white pt-2">
-            <Button
-              className="w-full h-10 shadow-none"
-              onClick={handleRequestRide}
-              disabled={
-                !destination ||
-                (userMode === "passenger" && !customPrice) ||
-                (pickupType === "custom" && !customPickupAddress)
-              }
-            >
-              {userMode === "passenger" ? "Request Ride" : "Start Trip"}
+            <Button className="w-full mt-4" onClick={handleRequestRide}>
+              {userMode === "passenger"
+                ? isConnected
+                  ? "Request Ride"
+                  : "Connect Wallet"
+                : "Start Trip"}
             </Button>
-          </div>
+          )}
         </CardContent>
       </Card>
 
-      <Dialog open={showCurrencyModal} onOpenChange={setShowCurrencyModal}>
+      <Dialog open={showTokenModal} onOpenChange={setShowTokenModal}>
         <DialogContent className="sm:max-w-[400px] p-0">
           <DialogHeader className="p-4 pb-2">
-            <DialogTitle>Select Currency</DialogTitle>
+            <DialogTitle>Select Token</DialogTitle>
           </DialogHeader>
           <Command className="border-0">
-            <CommandInput
-              placeholder="Search currencies..."
-              className="border-b"
-            />
+            <CommandInput placeholder="Search tokens..." className="border-b" />
             <CommandList className="max-h-[300px]">
-              <CommandEmpty>No currencies found.</CommandEmpty>
               <CommandGroup>
-                {currencies.map((currency) => (
-                  <CommandItem
-                    key={currency.code}
-                    onSelect={() => handleCurrencySelect(currency.code)}
-                    className="flex items-center justify-between py-2 px-4 cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium min-w-[40px]">
-                        {currency.code === "USD" ? "$" : currency.code}
-                      </span>
-                      <span>{currency.name}</span>
-                    </div>
-                    {selectedCurrency === currency.code && (
-                      <Check className="h-4 w-4 text-green-600" />
-                    )}
-                  </CommandItem>
-                ))}
+                {isLoadingEth ||
+                isLoadingUsdt ||
+                isLoadingUsdc ||
+                isLoadingWbtc ? (
+                  <div className="p-4 text-center text-sm text-gray-500">
+                    Loading tokens...
+                  </div>
+                ) : (
+                  tokens.map((token) => (
+                    <CommandItem
+                      key={token.address}
+                      onSelect={() => handleTokenSelect(token)}
+                      className="flex items-center justify-between py-2 px-4 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium min-w-[50px]">
+                          {token.symbol}
+                        </span>
+                        <span className="text-sm text-gray-600">
+                          {token.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">
+                          {parseFloat(token.balance).toFixed(4)}
+                        </span>
+                        {selectedToken?.address === token.address && (
+                          <Check className="h-4 w-4 text-green-600" />
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))
+                )}
               </CommandGroup>
             </CommandList>
           </Command>
