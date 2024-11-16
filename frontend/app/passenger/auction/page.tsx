@@ -52,7 +52,7 @@ function RideAuction({ rideId }: RideAuctionProps) {
   const router = useRouter;
 
   const handleGoToScanner = () => {
-    router.push("/passenger/scanner");
+    router.push("/passenger/auction/scanner");
   };
 
   // Read ride details
