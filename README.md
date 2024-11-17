@@ -75,7 +75,6 @@ npm run dev
 
 4. **Payment Processing**
    - Gasless transactions
-   - Multi-chain support
    - Instant settlement
 
 ## 🚀 Deployment
@@ -95,6 +94,7 @@ npm run deploy
 - [ ] Regional KYC integration
 - [ ] Smart contract insurance
 - [ ] Oracle price feeds
+- [ ] Cross-chain payment routing
 
 ## 🔐 Security
 
@@ -106,7 +106,6 @@ npm run deploy
 ## ⚡️ Technical Innovations
 
 - Gasless transactions via account abstraction
-- Cross-chain payment routing
 - Efficient ride matching algorithm
 - Web2-like UX with Web3 infrastructure
 
@@ -122,10 +121,6 @@ npm run deploy
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
 
-## 🤝 Support
-
-For support, email support@pullup.com or join our Discord community.
-
 ---
 
-Built with ❤️ for the future of transportation
+Built with ❤️ for the future of transportation and FOSS
